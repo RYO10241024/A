@@ -45,7 +45,7 @@ def monitor_prices():
             initial_price = initial_prices[token]
             price_change = ((current_price - initial_price) / initial_price) * 100
 
-            if abs(price_change) >= 10:  # ±10%以上変動
+            if abs(price_change) >= 0.01:  # ±10%以上変動
                 send_ntfy_notification(f"{token} が {initial_price:.2f} USDT から {current_price:.2f} USDT に変動 ({price_change:.2f}%)")
 
         time.sleep(10)  # 10秒ごとにチェック
