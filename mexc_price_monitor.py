@@ -3,7 +3,7 @@ import requests
 import os
 
 TOKENS = os.getenv("TOKENS", "BTCUSDT,ETHUSDT,XRPUSDT,DOGEUSDT,SOLUSDT,ADAUSDT,MATICUSDT").split(",")
-ALERT_THRESHOLD = float(os.getenv("ALERT_THRESHOLD", "10"))
+ALERT_THRESHOLD = float(os.getenv("ALERT_THRESHOLD", "1"))
 
 initial_prices = {}
 MEXC_API_URL = "https://api.mexc.com/api/v3/ticker/price"
