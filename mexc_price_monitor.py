@@ -1,22 +1,26 @@
 import time
-import requests
 import os
+import ccxt
+import requests
 
-TOKENS = os.getenv("TOKENS", "BTCUSDT,ETHUSDT,XRPUSDT,DOGEUSDT,SOLUSDT,ADAUSDT,MATICUSDT").split(",")
+# トークン設定
+TOKENS = os.getenv("TOKENS", "BTC/USDT,ETH/USDT,XRP/USDT,DOGE/USDT,SOL/USDT,ADA/USDT,MATIC/USDT").split(",")
 ALERT_THRESHOLD = float(os.getenv("ALERT_THRESHOLD", "10"))
 
+# MEXCのccxtインスタンス
+exchange = ccxt.mexc()
 initial_prices = {}
-MEXC_API_URL = "https://api.mexc.com/api/v3/ticker/price"
+
+# NTFY通知設定
 NTFY_TOPIC = "crypto12923"
 NTFY_URL = f"https://ntfy.sh/{NTFY_TOPIC}"
 
 def get_price(symbol):
-    """MEXCからトークンの現在価格を取得"""
+    """ccxtでMEXCから現在価格を取得"""
     try:
-        response = requests.get(f"{MEXC_API_URL}?symbol={symbol}", timeout=5)
-        response.raise_for_status()
-        return float(response.json()["price"])
-    except requests.exceptions.RequestException as e:
+        ticker = exchange.fetch_ticker(symbol)
+        return ticker['last']
+    except Exception as e:
         print(f"⚠ {symbol} の価格取得に失敗: {e}")
         return None
 
@@ -28,7 +32,7 @@ def send_ntfy_notification(message):
         print(f"⚠ 通知の送信に失敗: {e}")
 
 def monitor_prices():
-    """価格を監視し、クラッシュ時に自動復旧"""
+    """価格を監視し、閾値を超えたら通知"""
     global initial_prices
 
     for token in TOKENS:
@@ -45,21 +49,20 @@ def monitor_prices():
                 price_change = ((current_price - initial_price) / initial_price) * 100
 
                 if abs(price_change) >= ALERT_THRESHOLD:
-                    send_ntfy_notification(f"{token} が {initial_price:.2f} USDT から {current_price:.2f} USDT に変動 ({price_change:.4f}%)")
+                    send_ntfy_notification(
+                        f"{token} が {initial_price:.4f} USDT から {current_price:.4f} USDT に変動 ({price_change:.2f}%)"
+                    )
 
             time.sleep(10)
 
         except Exception as e:
             print(f"⚠ エラー発生: {e}")
-            time.sleep(5)  # 5秒待ってリトライ
+            time.sleep(5)
 
 if __name__ == "__main__":
-    while True:  # クラッシュしても無限に再起動
+    while True:
         try:
             monitor_prices()
         except Exception as e:
             print(f"⚠ 重大なエラー: {e}")
-            time.sleep(10)  # 10秒待って再起動
-
-if __name__ == "__main__":
-    monitor_prices()
+            time.sleep(10)
