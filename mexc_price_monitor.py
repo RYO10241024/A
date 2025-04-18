@@ -4,8 +4,8 @@ import ccxt
 import requests
 
 # トークン設定
-TOKENS = os.getenv("TOKENS", "BTC/USDT,ETH/USDT,XRP/USDT,DOGE/USDT,SOL/USDT,ADA/USDT,MATIC/USDT").split(",")
-ALERT_THRESHOLD = float(os.getenv("ALERT_THRESHOLD", "10"))
+TOKENS = os.getenv("TOKENS", "BTC/USDT,ETH/USDT,XRP/USDT,DOGE/USDT).split(",")
+ALERT_THRESHOLD = float(os.getenv("ALERT_THRESHOLD", "0.1"))
 
 # MEXCのccxtインスタンス
 exchange = ccxt.mexc()
