@@ -7,7 +7,7 @@ import requests
 TOKENS_8 = os.getenv("TOKENS_8", "BTC/USDT,ETH/USDT").split(",")
 TOKENS_20 = os.getenv("TOKENS_20", "XRP/USDT,DOGE/USDT").split(",")
 
-THRESHOLD_8 = 15
+THRESHOLD_8 = 8
 THRESHOLD_20 = 20
 
 # 監視対象トークンをグループ化
