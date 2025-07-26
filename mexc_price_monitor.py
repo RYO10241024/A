@@ -3,9 +3,18 @@ import os
 import ccxt
 import requests
 
-# トークン設定
-TOKENS = os.getenv("TOKENS", "BTC/USDT,ETH/USDT,XRP/USDT,DOGE/USDT").split(",")
-ALERT_THRESHOLD = float(os.getenv("ALERT_THRESHOLD", "8"))
+# 環境変数からトークンを取得（カンマ区切り）
+TOKENS_8 = os.getenv("TOKENS_8", "BTC/USDT,ETH/USDT").split(",")
+TOKENS_20 = os.getenv("TOKENS_20", "XRP/USDT,DOGE/USDT").split(",")
+
+THRESHOLD_8 = 8
+THRESHOLD_20 = 20
+
+# 監視対象トークンをグループ化
+TOKEN_GROUPS = [
+    {"tokens": TOKENS_8, "threshold": THRESHOLD_8},
+    {"tokens": TOKENS_20, "threshold": THRESHOLD_20}
+]
 
 # MEXCのccxtインスタンス
 exchange = ccxt.mexc()
@@ -35,23 +44,26 @@ def monitor_prices():
     """価格を監視し、閾値を超えたら通知"""
     global initial_prices
 
-    for token in TOKENS:
-        initial_prices[token] = get_price(token)
+    for group in TOKEN_GROUPS:
+        for token in group["tokens"]:
+            initial_prices[token] = get_price(token)
 
     while True:
         try:
-            for token in TOKENS:
-                current_price = get_price(token)
-                if current_price is None or token not in initial_prices:
-                    continue
+            for group in TOKEN_GROUPS:
+                threshold = group["threshold"]
+                for token in group["tokens"]:
+                    current_price = get_price(token)
+                    if current_price is None or token not in initial_prices:
+                        continue
 
-                initial_price = initial_prices[token]
-                price_change = ((current_price - initial_price) / initial_price) * 100
+                    initial_price = initial_prices[token]
+                    price_change = ((current_price - initial_price) / initial_price) * 100
 
-                if abs(price_change) >= ALERT_THRESHOLD:
-                    send_ntfy_notification(
-                        f"{token} が {initial_price:.4f} USDT から {current_price:.4f} USDT に変動 ({price_change:.2f}%)"
-                    )
+                    if abs(price_change) >= threshold:
+                        send_ntfy_notification(
+                            f"{token} が {initial_price:.4f} USDT から {current_price:.4f} USDT に変動 ({price_change:.2f}%)"
+                        )
 
             time.sleep(10)
 
