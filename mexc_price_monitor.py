@@ -17,7 +17,7 @@ THRESHOLD_50 = 50
 # 監視対象トークンをグループ化
 TOKEN_GROUPS = [
     {"tokens": TOKENS_8, "threshold": THRESHOLD_8},
-    {"tokens": TOKENS_20, "threshold": THRESHOLD_20}
+    {"tokens": TOKENS_20, "threshold": THRESHOLD_20},
     {"tokens": TOKENS_50, "threshold": THRESHOLD_50}
 
 ]
