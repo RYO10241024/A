@@ -6,14 +6,20 @@ import requests
 # 環境変数からトークンを取得（カンマ区切り）
 TOKENS_8 = os.getenv("TOKENS_8", "BTC/USDT,ETH/USDT").split(",")
 TOKENS_20 = os.getenv("TOKENS_20", "XRP/USDT,DOGE/USDT").split(",")
+TOKENS_50 = os.getenv("TOKENS_50", "XRP/USDT,DOGE/USDT").split(",")
+
 
 THRESHOLD_8 = 8
 THRESHOLD_20 = 20
+THRESHOLD_50 = 50
+
 
 # 監視対象トークンをグループ化
 TOKEN_GROUPS = [
     {"tokens": TOKENS_8, "threshold": THRESHOLD_8},
     {"tokens": TOKENS_20, "threshold": THRESHOLD_20}
+    {"tokens": TOKENS_50, "threshold": THRESHOLD_50}
+
 ]
 
 # MEXCのccxtインスタンス
