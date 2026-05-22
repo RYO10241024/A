@@ -4,7 +4,7 @@ import requests
 import ccxt
 
 # =========================================================
-# 設定
+# CONFIG
 # =========================================================
 
 CHECK_INTERVAL = 10
@@ -17,52 +17,48 @@ NTFY_TOPIC = "crypto12923"
 NTFY_URL = f"https://ntfy.sh/{NTFY_TOPIC}"
 
 # =========================================================
-# 環境変数
-# 未設定なら監視しない
+# TOKEN PARSE
 # =========================================================
 
 def parse_tokens(env_name):
+
     value = os.getenv(env_name, "").strip()
 
     if not value:
         return []
 
     return [
-        token.strip()
-        for token in value.split(",")
-        if token.strip()
+        x.strip()
+        for x in value.split(",")
+        if x.strip()
     ]
-
-TOKENS_8 = parse_tokens("TOKENS_8")
-TOKENS_20 = parse_tokens("TOKENS_20")
-TOKENS_50 = parse_tokens("TOKENS_50")
 
 TOKEN_GROUPS = [
     {
-        "tokens": TOKENS_8,
+        "tokens": parse_tokens("TOKENS_8"),
         "threshold": THRESHOLD_8
     },
     {
-        "tokens": TOKENS_20,
+        "tokens": parse_tokens("TOKENS_20"),
         "threshold": THRESHOLD_20
     },
     {
-        "tokens": TOKENS_50,
+        "tokens": parse_tokens("TOKENS_50"),
         "threshold": THRESHOLD_50
     }
 ]
 
-# 空除外
 TOKEN_GROUPS = [
     g for g in TOKEN_GROUPS
     if g["tokens"]
 ]
 
 # =========================================================
-# 取引所
+# EXCHANGES
 # =========================================================
 
-EXCHANGES = [
+RAW_EXCHANGES = [
+
     (
         "Bybit",
         ccxt.bybit({
@@ -108,19 +104,38 @@ EXCHANGES = [
     ),
 ]
 
+EXCHANGES = []
+
 # =========================================================
-# キャッシュ
+# CACHE
 # =========================================================
 
 MARKETS_CACHE = {}
+SYMBOL_CACHE = {}
 INITIAL_PRICES = {}
+ERROR_CACHE = set()
 
 # =========================================================
-# util
+# LOG
+# =========================================================
+
+def once_error(msg):
+
+    if msg in ERROR_CACHE:
+        return
+
+    ERROR_CACHE.add(msg)
+
+    print(msg)
+
+# =========================================================
+# NTFY
 # =========================================================
 
 def send_ntfy(message):
+
     try:
+
         requests.post(
             NTFY_URL,
             data=message.encode("utf-8"),
@@ -128,88 +143,135 @@ def send_ntfy(message):
         )
 
     except Exception as e:
-        print(f"⚠ 通知失敗: {e}")
 
-def load_markets_once(exchange_name, exchange):
-    if exchange_name in MARKETS_CACHE:
-        return MARKETS_CACHE[exchange_name]
+        once_error(f"⚠ ntfy error: {e}")
 
-    try:
-        markets = exchange.load_markets()
-        MARKETS_CACHE[exchange_name] = markets
-        return markets
+# =========================================================
+# LOAD MARKETS
+# =========================================================
 
-    except Exception as e:
-        print(f"⚠ {exchange_name} market load error: {e}")
-        return {}
+def setup_exchanges():
 
-def normalize_symbol(exchange_name, markets, symbol):
-    """
-    シンボル自動補正
-    """
+    global EXCHANGES
 
-    # 完全一致
+    for exchange_name, exchange in RAW_EXCHANGES:
+
+        try:
+
+            print(f"🔄 loading {exchange_name}")
+
+            markets = exchange.load_markets()
+
+            MARKETS_CACHE[exchange_name] = markets
+
+            EXCHANGES.append(
+                (
+                    exchange_name,
+                    exchange
+                )
+            )
+
+            print(
+                f"✅ {exchange_name} loaded "
+                f"({len(markets)} markets)"
+            )
+
+        except Exception as e:
+
+            once_error(
+                f"⚠ {exchange_name} disabled: {e}"
+            )
+
+# =========================================================
+# SYMBOL FIND
+# =========================================================
+
+def normalize_symbol(exchange_name, symbol):
+
+    cache_key = f"{exchange_name}:{symbol}"
+
+    if cache_key in SYMBOL_CACHE:
+        return SYMBOL_CACHE[cache_key]
+
+    markets = MARKETS_CACHE.get(exchange_name, {})
+
+    # exact
     if symbol in markets:
+
+        SYMBOL_CACHE[cache_key] = symbol
+
         return symbol
 
-    symbol_upper = symbol.upper()
+    target = (
+        symbol.upper()
+        .replace("/", "")
+        .replace(":USDT", "")
+    )
 
-    # 部分一致探索
+    # partial match
     for market_symbol in markets.keys():
-        if symbol_upper.replace("/", "") in market_symbol.upper().replace("/", ""):
+
+        normalized_market = (
+            market_symbol.upper()
+            .replace("/", "")
+            .replace(":USDT", "")
+        )
+
+        if target in normalized_market:
+
+            SYMBOL_CACHE[cache_key] = market_symbol
+
             print(
                 f"🔄 {exchange_name}: "
                 f"{symbol} -> {market_symbol}"
             )
+
             return market_symbol
 
+    SYMBOL_CACHE[cache_key] = None
+
     return None
+
+# =========================================================
+# PRICE
+# =========================================================
 
 def get_price(symbol):
 
     for exchange_name, exchange in EXCHANGES:
 
         try:
-            markets = load_markets_once(
-                exchange_name,
-                exchange
-            )
 
             actual_symbol = normalize_symbol(
                 exchange_name,
-                markets,
                 symbol
             )
 
             if not actual_symbol:
                 continue
 
-            ticker = exchange.fetch_ticker(actual_symbol)
+            ticker = exchange.fetch_ticker(
+                actual_symbol
+            )
 
             price = ticker.get("last")
 
             if price is not None:
 
-                print(
-                    f"✅ {exchange_name} "
-                    f"{actual_symbol}: {price}"
-                )
-
                 return float(price)
 
         except Exception as e:
 
-            print(
+            once_error(
                 f"⚠ {exchange_name} "
-                f"{symbol}: {type(e).__name__}: {e}"
+                f"{symbol}: "
+                f"{type(e).__name__}"
             )
-
-    print(f"❌ {symbol}: 全取引所で取得失敗")
 
     return None
 
 # =========================================================
-# 監視
+# INITIAL PRICE
 # =========================================================
 
 def setup_initial_prices():
@@ -228,15 +290,22 @@ def setup_initial_prices():
                 INITIAL_PRICES[token] = price
 
                 print(
-                    f"📌 初期価格 "
-                    f"{token}: {price}"
+                    f"📌 {token}: {price}"
                 )
+
+# =========================================================
+# MONITOR
+# =========================================================
 
 def monitor():
 
     if not TOKEN_GROUPS:
-        print("⚠ 監視対象なし")
+
+        print("⚠ no tokens")
+
         return
+
+    setup_exchanges()
 
     setup_initial_prices()
 
@@ -260,73 +329,55 @@ def monitor():
                     if initial_price is None:
                         continue
 
-                    change_percent = (
+                    change = (
                         (
-                            current_price - initial_price
+                            current_price
+                            - initial_price
                         ) / initial_price
                     ) * 100
 
                     print(
-                        f"📈 {token} | "
-                        f"{change_percent:.2f}% | "
-                        f"{initial_price} -> {current_price}"
+                        f"📈 {token} "
+                        f"{change:.2f}%"
                     )
 
-                    if abs(change_percent) >= threshold:
+                    if abs(change) >= threshold:
 
-                        message = (
+                        msg = (
                             f"{token}\n"
-                            f"{initial_price:.6f} -> "
+                            f"{initial_price:.6f}"
+                            f" -> "
                             f"{current_price:.6f}\n"
-                            f"変動率: {change_percent:.2f}%"
+                            f"{change:.2f}%"
                         )
 
-                        send_ntfy(message)
+                        send_ntfy(msg)
 
-                        print(f"🚨 通知送信: {token}")
+                        print(
+                            f"🚨 alert {token}"
+                        )
 
-                        # 基準更新
+                        # reset base
                         INITIAL_PRICES[token] = current_price
 
             time.sleep(CHECK_INTERVAL)
 
         except Exception as e:
 
-            print(f"⚠ monitor error: {e}")
+            once_error(
+                f"⚠ monitor: {e}"
+            )
 
             time.sleep(5)
 
 # =========================================================
-# main
+# MAIN
 # =========================================================
 
 if __name__ == "__main__":
 
-    print("===================================")
-    print(" Crypto Price Monitor Started")
-    print("===================================")
+    print("================================")
+    print(" CRYPTO MONITOR STARTED")
+    print("================================")
 
-    print()
-
-    for group in TOKEN_GROUPS:
-
-        print(
-            f"Threshold {group['threshold']}%"
-        )
-
-        for token in group["tokens"]:
-            print(f" - {token}")
-
-    print()
-
-    while True:
-
-        try:
-
-            monitor()
-
-        except Exception as e:
-
-            print(f"⚠ fatal error: {e}")
-
-            time.sleep(10)
+    monitor()
