@@ -357,9 +357,6 @@ def monitor():
                             f"🚨 alert {token}"
                         )
 
-                        # reset base
-                        INITIAL_PRICES[token] = current_price
-
             time.sleep(CHECK_INTERVAL)
 
         except Exception as e:
